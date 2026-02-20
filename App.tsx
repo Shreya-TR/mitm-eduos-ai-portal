@@ -42,6 +42,118 @@ interface ManagerProps {
   exportToExcel: (data: any[], fileName: string) => void;
 }
 
+const normalizeModelText = (text: string) => {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .replace(/(^|[^\n])(#{1,6}\s+)/g, '$1\n$2')
+    .replace(/(^|[^\n])([-*]\s+\*\*)/g, '$1\n$2')
+    .replace(/(^|[^\n])([-*]\s+[A-Za-z0-9])/g, '$1\n$2')
+    .replace(/(^|[^\n])(\d+\.\s+)/g, '$1\n$2')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const renderInlineMarkdown = (text: string, keyPrefix: string): React.ReactNode[] => {
+  return text
+    .split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+    .filter(Boolean)
+    .map((token, index) => {
+      if (token.startsWith('**') && token.endsWith('**')) {
+        return (
+          <strong key={`${keyPrefix}-b-${index}`} className="text-white font-black">
+            {token.slice(2, -2)}
+          </strong>
+        );
+      }
+      if (token.startsWith('`') && token.endsWith('`')) {
+        return (
+          <code key={`${keyPrefix}-c-${index}`} className="rounded bg-slate-800 px-1 py-0.5 text-blue-300">
+            {token.slice(1, -1)}
+          </code>
+        );
+      }
+      return <React.Fragment key={`${keyPrefix}-t-${index}`}>{token}</React.Fragment>;
+    });
+};
+
+const ChatMessageContent: React.FC<{ text: string }> = ({ text }) => {
+  const lines = normalizeModelText(text).split('\n');
+  const blocks: React.ReactNode[] = [];
+  let listBuffer: { type: 'ul' | 'ol'; text: string }[] = [];
+
+  const flushList = (keySuffix: number) => {
+    if (listBuffer.length === 0) return;
+    const listType = listBuffer[0].type;
+    const items = listBuffer.map((item, i) => (
+      <li key={`li-${keySuffix}-${i}`} className="text-slate-300">
+        {renderInlineMarkdown(item.text, `li-${keySuffix}-${i}`)}
+      </li>
+    ));
+    blocks.push(
+      listType === 'ol' ? (
+        <ol key={`ol-${keySuffix}`} className="list-decimal space-y-1 pl-5 marker:text-blue-400">
+          {items}
+        </ol>
+      ) : (
+        <ul key={`ul-${keySuffix}`} className="list-disc space-y-1 pl-5 marker:text-blue-400">
+          {items}
+        </ul>
+      )
+    );
+    listBuffer = [];
+  };
+
+  const appendListItem = (type: 'ul' | 'ol', value: string, index: number) => {
+    if (listBuffer.length > 0 && listBuffer[0].type !== type) {
+      flushList(index);
+    }
+    listBuffer.push({ type, text: value });
+  };
+
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line) {
+      flushList(index);
+      return;
+    }
+
+    const headingMatch = line.match(/^#{1,6}\s+(.+)$/);
+    if (headingMatch) {
+      flushList(index);
+      blocks.push(
+        <p key={`h-${index}`} className="pt-1 text-xs font-black uppercase tracking-widest text-blue-300">
+          {renderInlineMarkdown(headingMatch[1], `h-${index}`)}
+        </p>
+      );
+      return;
+    }
+
+    const bulletMatch = line.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch) {
+      appendListItem('ul', bulletMatch[1], index);
+      return;
+    }
+
+    const numberedMatch = line.match(/^\d+\.\s+(.+)$/);
+    if (numberedMatch) {
+      appendListItem('ol', numberedMatch[1], index);
+      return;
+    }
+
+    flushList(index);
+    blocks.push(
+      <p key={`p-${index}`} className="text-slate-300">
+        {renderInlineMarkdown(line, `p-${index}`)}
+      </p>
+    );
+  });
+
+  flushList(lines.length);
+
+  return <div className="space-y-2">{blocks}</div>;
+};
+
 const AttendanceManager: React.FC<ManagerProps> = ({ 
   userType, userEmail, authToken, search, attendance, setAttendance, exportToExcel 
 }) => {
@@ -1053,7 +1165,7 @@ const App: React.FC = () => {
       case AppTab.SYLLABUS: title = 'Academic Syllabus'; desc = 'AI Scraper + Teacher Curated content.'; break;
       case AppTab.NOTES: title = 'Notes Aggregator'; desc = 'Accurate repositories for VTU students.'; fields = { subject: true, buttonText: 'Fetch Resources' }; break;
       case AppTab.LESSON_PLAN: title = 'Lesson Planner'; desc = 'Build logical teaching schedules.'; fields = { subject: true, numClasses: true, buttonText: 'Generate Plan' }; break;
-      case AppTab.QP_GEN: title = 'Exam Designer'; desc = 'AI Drafted VTU Standard Question Papers.'; fields = { subject: true, difficulty: true, qpType: true, uploadDoc: true, buttonText: 'Draft Paper' }; break;
+      case AppTab.QP_GEN: title = 'Exam Designer'; desc = 'AI Drafted VTU Standard Question Papers.'; fields = { subject: true, difficulty: true, qpType: true, uploadSyllabusDoc: true, uploadNotesDoc: true, buttonText: 'Draft Paper' }; break;
       case AppTab.QUIZ_GEN: title = 'Quiz Builder'; desc = 'Instant internal MCQs.'; fields = { subject: true, uploadDoc: true, buttonText: 'Create Quiz' }; break;
       case AppTab.DOC_INSIGHTS: title = 'Doc Intelligence'; desc = 'Extract key insights from PDFs.'; fields = { subject: true, uploadDoc: true, buttonText: 'Analyze Doc' }; break;
       case AppTab.ATTENDANCE: title = userType === 'teacher' ? 'Attendance Control' : 'My Attendance'; desc = 'Track presence for 10-20 day blocks.'; break;
@@ -1147,7 +1259,13 @@ const App: React.FC = () => {
              <div className="flex-1 overflow-y-auto p-8 space-y-6">
                 {chatMessages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-6 rounded-3xl shadow-xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-900 text-slate-300 border border-white/5 rounded-tl-none'}`}>{m.text}</div>
+                    <div className={`max-w-[85%] p-6 rounded-3xl shadow-xl text-sm leading-relaxed ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-slate-900 text-slate-300 border border-white/5 rounded-tl-none'}`}>
+                      {m.role === 'user' ? (
+                        <span className="whitespace-pre-wrap break-words">{m.text}</span>
+                      ) : (
+                        <ChatMessageContent text={m.text} />
+                      )}
+                    </div>
                   </div>
                 ))}
                 {isLoading && <div className="text-xs font-bold italic text-slate-500">Processing Neural Link...</div>}

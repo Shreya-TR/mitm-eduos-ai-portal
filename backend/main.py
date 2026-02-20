@@ -207,6 +207,8 @@ class SearchStateIn(BaseModel):
     numPartA: str = '5'
     numPartB: str = '5'
     pdfBase64: str | None = None
+    syllabusPdfBase64: str | None = None
+    notesPdfBase64: str | None = None
 
 
 class AITaskRequest(BaseModel):
@@ -589,15 +591,37 @@ MANDATORY PATTERN:
 - Create exactly 4 question slots (Q1 to Q4), each worth 10 marks.
 - Each slot must contain optional questions from the same module: Qx(a) OR Qx(b).
 - Cover modules in a balanced way.
+- For every slot, first print a COMMON STEM line before (a) and (b).
+- Under each slot, print "Answer any one:" and then (a) OR (b).
+DIAGRAM MANDATE:
+- Include at least ONE diagram-based question slot.
+- For Data Structures / Algorithms topics, the diagram must be related to Binary Tree / Forest / Heap / Graph.
+- Print the diagram as ASCII inside a fenced code block directly under that question option.
+- If the subject is not diagram-heavy, include a relevant flowchart-style ASCII diagram.
 STRICT SECTION ISOLATION RULES:
 - Keep all answers out of the question section.
 - Put answers only in a separate final section titled "### Answer Key".
 OUTPUT FORMAT (Markdown):
 ### Internal QP (40 Marks)
-Q1 (Module ...): (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q2 (Module ...): (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q3 (Module ...): (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q4 (Module ...): (a) ... (10 Marks) OR (b) ... (10 Marks)
+Q1 (Module ...):
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q2 (Module ...):
+Common Stem: Consider the following binary tree and answer any one:
+```text
+<insert required diagram if this is the diagram-based slot>
+```
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q3 (Module ...):
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q4 (Module ...):
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
 ### Answer Key
 Q1: a->..., b->...
 Q2: a->..., b->...
@@ -614,34 +638,80 @@ MANDATORY PATTERN:
 - Every module must include optional questions.
 - Create exactly 10 question slots total (2 slots per module), each 10 marks.
 - Every slot must have two options from the same module: Qx(a) OR Qx(b).
+- For every slot, print a COMMON STEM line before (a) and (b).
+- Under each slot, print "Answer any one:" and then (a) OR (b).
+DIAGRAM MANDATE:
+- Include at least TWO diagram-based question slots.
+- For Data Structures / Algorithms topics, include Binary Tree / Forest / Heap / Graph style diagrams.
+- Render each required diagram as ASCII inside fenced code blocks below the question option.
 STRICT SECTION ISOLATION RULES:
 - Keep all answers out of the question section.
 - Put answers only in a separate final section titled "### Answer Key".
 OUTPUT FORMAT (Markdown):
 ### Final Exam QP (100 Marks)
 #### Module 1
-Q1: (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q2: (a) ... (10 Marks) OR (b) ... (10 Marks)
+Q1:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q2:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
 #### Module 2
-Q3: (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q4: (a) ... (10 Marks) OR (b) ... (10 Marks)
+Q3:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q4:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
 #### Module 3
-Q5: (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q6: (a) ... (10 Marks) OR (b) ... (10 Marks)
+Q5:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q6:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
 #### Module 4
-Q7: (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q8: (a) ... (10 Marks) OR (b) ... (10 Marks)
+Q7:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q8:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
 #### Module 5
-Q9: (a) ... (10 Marks) OR (b) ... (10 Marks)
-Q10: (a) ... (10 Marks) OR (b) ... (10 Marks)
+Q9:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+Q10:
+Common Stem: ...
+Answer any one:
+(a) ... (10 Marks) OR (b) ... (10 Marks)
+```text
+<insert required diagram blocks under the diagram-based questions>
+```
 ### Answer Key
 Q1: a->..., b->...
 ...
 Q10: a->..., b->...
 HOD Governance Rules to follow: {search.hodRules or 'None'}"""
 
-        if search.pdfBase64:
-            prompt += ' Use the uploaded document context while drafting questions.'
+        if search.pdfBase64 or search.syllabusPdfBase64 or search.notesPdfBase64:
+            prompt += '\nUPLOADED CONTEXT FLAGS:\n'
+            if search.syllabusPdfBase64:
+                prompt += '- Syllabus PDF uploaded by faculty.\n'
+            if search.notesPdfBase64:
+                prompt += '- Notes PDF uploaded by faculty.\n'
+            if search.pdfBase64:
+                prompt += '- Generic reference PDF uploaded.\n'
+            prompt += 'Use uploaded context signals while drafting questions.'
         return prompt
 
     if task == 'QUIZ':
@@ -663,6 +733,155 @@ OUTPUT FORMAT (Markdown):
 ..."""
 
     return f'Analyze the uploaded document for {search.subject}. Provide a summary of core topics, important formulas, and 5 likely exam questions based on this content.'
+
+
+def clip_text(value: str | None, limit: int = 600) -> str:
+    if not value:
+        return ''
+    compact = ' '.join(str(value).split())
+    if len(compact) <= limit:
+        return compact
+    return f'{compact[:limit].rstrip()}...'
+
+
+def build_qp_reference_context(search: SearchStateIn) -> str:
+    branch = search.branch.strip()
+    semester = search.semester.strip()
+    subject = search.subject.strip()
+
+    syllabus_rows: list[dict] = []
+    notes_rows: list[dict] = []
+
+    try:
+        with closing(get_db_connection()) as conn:
+            with conn.cursor() as cur:
+                syllabus_params: list[str] = [branch, semester]
+                syllabus_subject_filter = ''
+                if subject:
+                    syllabus_subject_filter = ' and lower(trim(subject)) = lower(trim(%s))'
+                    syllabus_params.append(subject)
+
+                cur.execute(
+                    f'''
+                    select subject, subject_code, content, file_name
+                    from syllabus
+                    where branch = %s
+                      and semester = %s
+                      {syllabus_subject_filter}
+                    order by created_at desc, id desc
+                    limit 3
+                    ''',
+                    tuple(syllabus_params),
+                )
+                syllabus_rows = cur.fetchall()
+
+                if not syllabus_rows and subject:
+                    cur.execute(
+                        '''
+                        select subject, subject_code, content, file_name
+                        from syllabus
+                        where branch = %s
+                          and semester = %s
+                        order by created_at desc, id desc
+                        limit 3
+                        ''',
+                        (branch, semester),
+                    )
+                    syllabus_rows = cur.fetchall()
+
+                notes_params: list[str] = [branch, semester]
+                notes_subject_filter = ''
+                if subject:
+                    notes_subject_filter = ' and lower(trim(subject)) = lower(trim(%s))'
+                    notes_params.append(subject)
+
+                cur.execute(
+                    f'''
+                    select title, subject, file_name, scheme
+                    from notes
+                    where branch = %s
+                      and semester = %s
+                      {notes_subject_filter}
+                    order by created_at desc, id desc
+                    limit 8
+                    ''',
+                    tuple(notes_params),
+                )
+                notes_rows = cur.fetchall()
+
+                if not notes_rows and subject:
+                    cur.execute(
+                        '''
+                        select title, subject, file_name, scheme
+                        from notes
+                        where branch = %s
+                          and semester = %s
+                        order by created_at desc, id desc
+                        limit 8
+                        ''',
+                        (branch, semester),
+                    )
+                    notes_rows = cur.fetchall()
+    except Exception as exc:
+        return f'Could not load syllabus/notes context from DB: {exc}'
+
+    lines = [
+        f'Branch: {branch}',
+        f'Semester: {semester}',
+        f'Subject focus: {subject or "not specified"}',
+    ]
+
+    if syllabus_rows:
+        lines.append('Syllabus references:')
+        for idx, row in enumerate(syllabus_rows, start=1):
+            subject_name = clip_text(row.get('subject'), 100) or 'N/A'
+            subject_code = clip_text(row.get('subject_code'), 60)
+            file_name = clip_text(row.get('file_name'), 120) or 'N/A'
+            content = clip_text(row.get('content'), 700)
+            code_suffix = f' ({subject_code})' if subject_code else ''
+            lines.append(f'- S{idx}: {subject_name}{code_suffix}; file: {file_name}')
+            if content:
+                lines.append(f'  Topics: {content}')
+    else:
+        lines.append('Syllabus references: none found.')
+
+    if notes_rows:
+        lines.append('Notes references:')
+        for idx, row in enumerate(notes_rows, start=1):
+            title = clip_text(row.get('title'), 120) or 'Untitled'
+            note_subject = clip_text(row.get('subject'), 100) or 'N/A'
+            file_name = clip_text(row.get('file_name'), 120) or 'N/A'
+            scheme = clip_text(row.get('scheme'), 60)
+            scheme_suffix = f'; scheme: {scheme}' if scheme else ''
+            lines.append(f'- N{idx}: {title} | subject: {note_subject} | file: {file_name}{scheme_suffix}')
+    else:
+        lines.append('Notes references: none found.')
+
+    return '\n'.join(lines)
+
+
+def ensure_qp_has_diagram(text: str, subject: str) -> str:
+    normalized = (text or '').strip()
+    if not normalized:
+        normalized = '### Question Paper\nContent could not be generated.'
+    if '```' in normalized:
+        return normalized
+
+    fallback = f"""
+
+### Auto-Added Diagram Practice ({subject})
+Use this diagram-focused question in the paper if required.
+
+Q-Diagram: Construct the Binary Search Tree for the keys: 50, 30, 70, 20, 40, 60, 80 and explain one traversal.
+```text
+        50
+       /  \\
+     30    70
+    / \\    / \\
+  20  40 60  80
+```
+""".rstrip()
+    return f'{normalized}\n{fallback}'
 
 @app.on_event('startup')
 def startup() -> None:
@@ -955,7 +1174,22 @@ def ai_notes(search: SearchStateIn, current_user: dict = Depends(get_current_use
 def ai_task(payload: AITaskRequest, current_user: dict = Depends(get_current_user)) -> AITextResponse:
     require_roles(current_user, {'faculty', 'hod'})
     prompt = build_teacher_prompt(payload.task, payload.search)
+    if payload.task == 'QP':
+        reference_context = build_qp_reference_context(payload.search)
+        prompt += f"""
+
+REFERENCE MATERIAL FROM INTERNAL DATABASE (SYLLABUS + NOTES):
+{reference_context}
+
+REFERENCE USAGE RULES:
+- Draft the question paper using the syllabus references first.
+- Align phrasing/examples with note references where applicable.
+- Prefer topics that appear in both syllabus and notes.
+- Keep final output in the mandated QP format without extra commentary.
+"""
     text = groq_complete([{'role': 'user', 'content': prompt}], max_completion_tokens=4096)
+    if payload.task == 'QP':
+        text = ensure_qp_has_diagram(text, payload.search.subject)
     return AITextResponse(text=text or 'Could not process task.')
 
 

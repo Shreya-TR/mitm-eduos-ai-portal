@@ -14,6 +14,8 @@ interface SearchPanelProps {
     difficulty?: boolean;
     qpType?: boolean;
     uploadDoc?: boolean;
+    uploadSyllabusDoc?: boolean;
+    uploadNotesDoc?: boolean;
     hideScheme?: boolean;
     qpCounts?: boolean;
     buttonText?: string;
@@ -22,16 +24,39 @@ interface SearchPanelProps {
 
 const SearchPanel: React.FC<SearchPanelProps> = ({ search, setSearch, onSearch, isLoading, fields }) => {
   const fileRef = useRef<HTMLInputElement>(null);
+  const syllabusFileRef = useRef<HTMLInputElement>(null);
+  const notesFileRef = useRef<HTMLInputElement>(null);
+
+  const handlePdfFile = (
+    file: File,
+    assign: (base64: string) => void
+  ) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1] || '';
+      assign(base64);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       const file = e.target.files[0];
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        setSearch(prev => ({ ...prev, pdfBase64: base64 }));
-      };
-      reader.readAsDataURL(file);
+      handlePdfFile(file, (base64) => setSearch(prev => ({ ...prev, pdfBase64: base64 })));
+    }
+  };
+
+  const handleSyllabusFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      handlePdfFile(file, (base64) => setSearch(prev => ({ ...prev, syllabusPdfBase64: base64 })));
+    }
+  };
+
+  const handleNotesFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const file = e.target.files[0];
+      handlePdfFile(file, (base64) => setSearch(prev => ({ ...prev, notesPdfBase64: base64 })));
     }
   };
 
@@ -150,7 +175,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ search, setSearch, onSearch, 
         </div>
       )}
 
-      {(fields.uploadDoc || fields.buttonText) && (
+      {(fields.uploadDoc || fields.uploadSyllabusDoc || fields.uploadNotesDoc || fields.buttonText) && (
         <div className="flex flex-col md:flex-row gap-4 pt-4 border-t border-white/5 items-center">
           {fields.uploadDoc && (
             <div className="flex-1 w-full">
@@ -169,6 +194,46 @@ const SearchPanel: React.FC<SearchPanelProps> = ({ search, setSearch, onSearch, 
               >
                 <i className={`fas ${search.pdfBase64 ? 'fa-check-circle' : 'fa-file-pdf'}`}></i>
                 {search.pdfBase64 ? 'Reference Document Active' : 'Inject Context (PDF)'}
+              </button>
+            </div>
+          )}
+          {fields.uploadSyllabusDoc && (
+            <div className="flex-1 w-full">
+              <input
+                type="file"
+                ref={syllabusFileRef}
+                className="hidden"
+                accept=".pdf"
+                onChange={handleSyllabusFileChange}
+              />
+              <button
+                onClick={() => syllabusFileRef.current?.click()}
+                className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                  search.syllabusPdfBase64 ? 'bg-green-600/10 text-green-500 border border-green-500/30' : 'bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700'
+                }`}
+              >
+                <i className={`fas ${search.syllabusPdfBase64 ? 'fa-check-circle' : 'fa-file-pdf'}`}></i>
+                {search.syllabusPdfBase64 ? 'Syllabus PDF Active' : 'Upload Syllabus PDF'}
+              </button>
+            </div>
+          )}
+          {fields.uploadNotesDoc && (
+            <div className="flex-1 w-full">
+              <input
+                type="file"
+                ref={notesFileRef}
+                className="hidden"
+                accept=".pdf"
+                onChange={handleNotesFileChange}
+              />
+              <button
+                onClick={() => notesFileRef.current?.click()}
+                className={`w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                  search.notesPdfBase64 ? 'bg-green-600/10 text-green-500 border border-green-500/30' : 'bg-slate-800/50 hover:bg-slate-800 text-slate-400 border border-slate-700'
+                }`}
+              >
+                <i className={`fas ${search.notesPdfBase64 ? 'fa-check-circle' : 'fa-file-pdf'}`}></i>
+                {search.notesPdfBase64 ? 'Notes PDF Active' : 'Upload Notes PDF'}
               </button>
             </div>
           )}

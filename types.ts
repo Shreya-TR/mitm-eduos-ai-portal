@@ -58,6 +58,8 @@ export interface SearchState {
   numPartA: string;
   numPartB: string;
   pdfBase64?: string;
+  syllabusPdfBase64?: string;
+  notesPdfBase64?: string;
 }
 
 export interface ResourceLink {

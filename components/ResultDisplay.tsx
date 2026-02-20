@@ -51,10 +51,31 @@ const wrapText = (text: string, maxCharsPerLine = 95) => {
   return lines;
 };
 
+const splitQuestionAndAnswer = (text: string) => {
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  const answerHeaderRegex = /^#{1,6}\s*answer key\b.*$/im;
+  const match = normalized.match(answerHeaderRegex);
+
+  if (!match || match.index === undefined) {
+    return { questionPaper: normalized, answerPaper: null as string | null };
+  }
+
+  const headerIndex = match.index;
+  const answerHeader = match[0].trim();
+  const questionPaper = normalized.slice(0, headerIndex).trim();
+  const answerBody = normalized.slice(headerIndex + match[0].length).trim();
+  const answerPaper = `${answerHeader}${answerBody ? `\n${answerBody}` : ''}`.trim();
+
+  return {
+    questionPaper: questionPaper || normalized,
+    answerPaper: answerPaper || null
+  };
+};
+
 const buildSimplePdf = (text: string) => {
   const safeText = toPdfAscii(text);
-  const allLines = wrapText(safeText, 95);
-  const maxLinesPerPage = 52;
+  const allLines = wrapText(safeText, 90);
+  const maxLinesPerPage = 50;
   const pages: string[][] = [];
   for (let i = 0; i < allLines.length; i += maxLinesPerPage) {
     pages.push(allLines.slice(i, i + maxLinesPerPage));
@@ -80,11 +101,20 @@ const buildSimplePdf = (text: string) => {
     const pageLines = pages[i];
 
     const streamLines = [
+      'q',
+      '1 w',
+      '40 40 515 762 re',
+      'S',
+      'Q',
       'BT',
       '/F1 11 Tf',
       '14 TL',
-      '50 800 Td',
+      '55 790 Td',
       ...pageLines.map((line, index) => `${index === 0 ? '' : 'T* '}(${escapePdfText(line)}) Tj`.trim()),
+      'ET',
+      'BT',
+      '/F1 9 Tf',
+      `270 24 Td (Page ${i + 1} of ${pages.length}) Tj`,
       'ET'
     ];
     const streamContent = streamLines.join('\n');
@@ -132,16 +162,35 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
     [downloadFileBaseName, title]
   );
 
-  const handleDownloadPdf = () => {
-    const blob = buildSimplePdf(editableSummary);
+  const paperSections = useMemo(() => splitQuestionAndAnswer(editableSummary), [editableSummary]);
+  const hasSeparateAnswerPaper = Boolean(paperSections.answerPaper);
+
+  const downloadPdf = (text: string, filename: string) => {
+    const blob = buildSimplePdf(text);
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${fileBaseName}.pdf`;
+    link.download = `${filename}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = () => {
+    downloadPdf(editableSummary, fileBaseName);
+  };
+
+  const handleDownloadQuestionPaperPdf = () => {
+    const questionText = `QUESTION PAPER\n\n${paperSections.questionPaper}`;
+    downloadPdf(questionText, `${fileBaseName}-question-paper`);
+  };
+
+  const handleDownloadAnswerPaperPdf = () => {
+    const answerText = paperSections.answerPaper
+      ? `ANSWER KEY\n\n${paperSections.answerPaper}`
+      : editableSummary;
+    downloadPdf(answerText, `${fileBaseName}-answer-paper`);
   };
 
   return (
@@ -165,13 +214,32 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({
                 <i className={`fas ${isEditing ? 'fa-eye' : 'fa-pen'} mr-2`}></i>
                 {isEditing ? 'Preview' : 'Edit'}
               </button>
-              <button
-                onClick={handleDownloadPdf}
-                className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-blue-600/15 border border-blue-500/30 text-blue-300 hover:bg-blue-600/25 transition-all"
-              >
-                <i className="fas fa-download mr-2"></i>
-                Download PDF
-              </button>
+              {hasSeparateAnswerPaper ? (
+                <>
+                  <button
+                    onClick={handleDownloadQuestionPaperPdf}
+                    className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-blue-600/15 border border-blue-500/30 text-blue-300 hover:bg-blue-600/25 transition-all"
+                  >
+                    <i className="fas fa-file-alt mr-2"></i>
+                    Question PDF
+                  </button>
+                  <button
+                    onClick={handleDownloadAnswerPaperPdf}
+                    className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-emerald-600/15 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/25 transition-all"
+                  >
+                    <i className="fas fa-key mr-2"></i>
+                    Answer PDF
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleDownloadPdf}
+                  className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-blue-600/15 border border-blue-500/30 text-blue-300 hover:bg-blue-600/25 transition-all"
+                >
+                  <i className="fas fa-download mr-2"></i>
+                  Download PDF
+                </button>
+              )}
             </div>
           )}
         </div>
