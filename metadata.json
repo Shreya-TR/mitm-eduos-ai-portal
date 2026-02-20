@@ -1,0 +1,7 @@
+{
+  "name": "MITM EduOs - AI Academic Portal",
+  "description": "An intelligence academic OS for modern education",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
